@@ -1,41 +1,54 @@
 import pandas as pd
+import joblib
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from joblib import dump
+from sklearn.metrics import mean_squared_error, accuracy_score
 
-# Assuming the dataset is loaded in a DataFrame called df
-# df = pd.read_csv('path_to_your_dataset.csv')  # Uncomment and use the correct path
+# Load and preprocess data
+df = pd.read_csv('/content/amz_ca_total_products_data_processed.csv')
 
-# Sample data preparation (mockup based on the provided structure)
-data = {
-    "title": ["Product A", "Product B", "Product C"],
-    "categoryName": ["Electronics", "Baby", "Electronics"],
-    "stars": [4.5, 3.0, 2.0],
-    "reviews": [150, 10, 5],
-    "price": [49.99, 25.00, 10.00],
-    "isBestSeller": [True, False, False]
-}
+# Sample the data
+df_sampled = df.sample(frac=0.1, random_state=42)
 
-df = pd.DataFrame(data)
+# Select relevant columns
+df_sampled = df_sampled[['stars', 'reviews', 'price', 'categoryName', 'isBestSeller']]
 
-# Preprocessing
-# Convert 'isBestSeller' to binary
-df['isBestSeller'] = df['isBestSeller'].astype(int)
+# Drop rows with missing values
+df_sampled.dropna(inplace=True)
 
-# Encode categorical variables
-df = pd.get_dummies(df, columns=['categoryName'])
+# Convert 'isBestSeller' to boolean
+df_sampled['isBestSeller'] = df_sampled['isBestSeller'].astype(bool)
 
-# Define features and target
-X = df.drop(columns=['title', 'isBestSeller'])
-y = df['isBestSeller']
+# One-hot encode categorical features
+encoder = OneHotEncoder()
+encoded_features = encoder.fit_transform(df_sampled[['categoryName', 'isBestSeller']])
+encoded_features_df = pd.DataFrame(encoded_features.toarray(), columns=encoder.get_feature_names_out())
 
-# Split the data
+# Combine the encoded features with the numerical features
+preprocessed_df = pd.concat([encoded_features_df, df_sampled[['reviews', 'price', 'stars']].reset_index(drop=True)], axis=1)
+
+# Split data into features and target variable
+X = preprocessed_df.drop('stars', axis=1)
+y = preprocessed_df['stars']
+
+# Split data into training and test sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Train the model
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
+# Train a regression model
+regressor = RandomForestRegressor(n_estimators=100, random_state=42)
+regressor.fit(X_train, y_train)
 
-# Save the model and the feature names
-dump(model, 'bestseller_predictor.joblib')
-dump(X_train.columns.tolist(), 'bestseller_predictor_features.pkl')
+# Predict on the test set
+y_pred = regressor.predict(X_test)
+
+# Evaluate the model
+mse = mean_squared_error(y_test, y_pred)
+accuracy = regressor.score(X_test, y_test)
+
+print(f'Mean Squared Error: {mse}')
+print(f'Accuracy: {accuracy}')
+
+# Save the model and encoder
+joblib.dump(regressor, '/content/random_forest_regressor_model.pkl')
+joblib.dump(encoder, '/content/encoder.pkl')
