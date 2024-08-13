@@ -1,6 +1,3 @@
-Here’s a sample README file for your project that you can use for GitHub:
-
----
 
 # Optimum Price Analysis for Sellers
 
